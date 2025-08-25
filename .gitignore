@@ -1,0 +1,44 @@
+# Kernel module build artifacts
+*.o
+*.ko
+*.mod.c
+*.mod
+*.order
+*.symvers
+*.markers
+*.tmp_versions/
+Module.symvers
+modules.order
+
+# Test programs
+src/ramdisk_test
+src/mmap_test
+src/logging_test
+
+# Editor and IDE files
+*~
+*.swp
+*.swo
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build directories
+build/
+dist/
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Log files
+*.log
