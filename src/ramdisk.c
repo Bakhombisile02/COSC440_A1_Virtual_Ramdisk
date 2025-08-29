@@ -739,7 +739,7 @@ static int ramdisk_init_module(void)
     }
     
     /* Create device class for udev integration - following template pattern */
-    ramdisk_device->class = class_create(THIS_MODULE, "asgn1");
+    ramdisk_device->class = class_create("asgn1");
     if (IS_ERR(ramdisk_device->class)) {
         printk(KERN_ERR "ramdisk: Failed to create device class\n");
         cdev_del(&ramdisk_device->cdev);

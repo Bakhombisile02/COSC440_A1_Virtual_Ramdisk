@@ -12,6 +12,7 @@ This project implements a Linux kernel module providing a virtual ramdisk charac
 
 ## Table of Contents
 
+- [Quick Start Guide](#quick-start-guide)
 - [Project Overview](#project-overview)
 - [Features](#features)
 - [Architecture](#architecture)
@@ -25,6 +26,47 @@ This project implements a Linux kernel module providing a virtual ramdisk charac
 - [Documentation](#documentation)
 - [Submission](#submission)
 - [License](#license)
+
+## Quick Start Guide
+
+**For a brand new Linux system, follow these steps in order:**
+
+1. **Install Prerequisites:**
+   ```bash
+   sudo apt update
+   sudo apt install -y build-essential linux-headers-$(uname -r) kmod
+   ```
+
+2. **Build and Load Module:**
+   ```bash
+   cd src/
+   make clean && make module && make test_program
+   sudo insmod ramdisk.ko
+   sudo mknod /dev/asgn1 c 239 0
+   sudo chmod 666 /dev/asgn1
+   ```
+
+3. **Verify Installation:**
+   ```bash
+   lsmod | grep ramdisk
+   ls -l /dev/asgn1
+   cat /proc/ramdisk_info
+   ```
+
+4. **Run Assignment Tests:**
+   ```bash
+   ls > /dev/asgn1
+   cat /dev/asgn1
+   sudo make full_test
+   ```
+
+5. **Clean Up:**
+   ```bash
+   sudo rmmod ramdisk
+   rm /dev/asgn1 2>/dev/null
+   ```
+
+**If any step fails, see the detailed Installation and Troubleshooting sections below.**
 
 ## Project Overview
 
@@ -104,63 +146,352 @@ COSC440_A1_Virtual_Ramdisk/
 
 ## Installation
 
-### Prerequisites
+### Prerequisites and System Setup
 
-**Linux Environment Required**
-- Linux kernel headers: `sudo apt-get install linux-headers-$(uname -r)` (Ubuntu/Debian)
-- Build tools: `sudo apt-get install build-essential`
-- GCC compiler and Make utility
-- Root privileges for kernel module operations
+**Fresh Linux Environment Setup (Ubuntu/Debian)**
+
+For a brand new Linux container or machine, install all required dependencies:
+
+```bash
+# Update package manager
+sudo apt update
+
+# Install essential build tools
+sudo apt install -y build-essential
+
+# Install kernel headers for current running kernel
+sudo apt install -y linux-headers-$(uname -r)
+
+# Install kernel module utilities (insmod, rmmod, lsmod)
+sudo apt install -y kmod
+
+# Verify kernel version and headers match
+uname -r
+ls /lib/modules/$(uname -r)/build/
+```
+
+**Container and Virtual Environment Notes:**
+
+- **Docker Containers**: Kernel modules cannot be loaded inside standard Docker containers due to security restrictions. Use privileged containers or run on host system.
+- **WSL (Windows Subsystem for Linux)**: WSL2 supports kernel modules, but may require enabling kernel module loading in the WSL kernel configuration.
+- **GitHub Codespaces**: Works correctly as demonstrated in testing. Kernel headers are installable and modules can be loaded.
+- **Cloud VMs**: Should work on most cloud providers (AWS, Azure, GCP) with proper permissions.
+- **Shared Hosting**: May not work due to restricted kernel access. Use dedicated VMs or containers with appropriate privileges.
+
+**Virtual Environment Troubleshooting:**
+
+```bash
+# Check if running in container
+if [ -f /.dockerenv ]; then
+    echo "Running in Docker - may need privileged mode"
+fi
+
+# Check kernel capabilities
+if ! [ -w /proc/sys ]; then
+    echo "Limited kernel access - may need elevated privileges"
+fi
+
+# Check if /dev can be written to
+if ! sudo touch /dev/test_write 2>/dev/null; then
+    echo "Cannot create device nodes - check container privileges"
+else
+    sudo rm /dev/test_write
+    echo "Device node creation available"
+fi
+```
+
+**Alternative Linux Distributions:**
+```bash
+# CentOS/RHEL/Fedora
+sudo yum install kernel-devel kernel-headers gcc make
+# or for newer versions:
+sudo dnf install kernel-devel kernel-headers gcc make
+
+# Arch Linux
+sudo pacman -S linux-headers base-devel
+```
+
+**System Requirements:**
+- Linux kernel version 3.0 or higher
+- GCC compiler version 4.8 or higher
+- Make utility
+- Root/sudo privileges for kernel module operations
+- At least 16MB RAM for testing (module uses dynamic allocation)
 
 ### Build Process
 
 ```bash
+# Navigate to project root
+cd /path/to/COSC440_A1_Virtual_Ramdisk
+
 # Navigate to source directory
 cd src/
 
-# Build the kernel module
-make clean && make
+# Clean any previous builds
+make clean
 
-# Build test program (optional)
+# Build the kernel module
+make module
+
+# Build comprehensive test program
 make test_program
 ```
 
 **Expected Build Output:**
 ```
-make -C /lib/modules/.../build M=/path/to/src modules
-CC [M]  /path/to/src/ramdisk.o
-Building modules, stage 2.
-MODPOST 1 modules
-CC      /path/to/src/ramdisk.mod.o
-LD [M]  /path/to/src/ramdisk.ko
+make -C /lib/modules/6.8.0-1030-azure/build M=/workspaces/COSC440_A1_Virtual_Ramdisk/src modules
+warning: the compiler differs from the one used to build the kernel
+  CC [M]  /workspaces/COSC440_A1_Virtual_Ramdisk/src/ramdisk.o
+  MODPOST /workspaces/COSC440_A1_Virtual_Ramdisk/src/Module.symvers
+  CC [M]  /workspaces/COSC440_A1_Virtual_Ramdisk/src/ramdisk.mod.o
+  LD [M]  /workspaces/COSC440_A1_Virtual_Ramdisk/src/ramdisk.ko
 ```
 
-### Module Loading
+**Common Build Issues and Solutions:**
+
+1. **Missing kernel headers:**
+   ```bash
+   # Error: No such file or directory: /lib/modules/.../build
+   # Solution: Install correct kernel headers
+   sudo apt install linux-headers-$(uname -r)
+   ```
+
+2. **class_create compatibility (newer kernels 6.4+):**
+   ```bash
+   # Error: too many arguments to function 'class_create'
+   # Error: passing argument 1 of 'class_create' from incompatible pointer type
+   # This issue has been fixed in the provided code
+   # The fix changes: class_create(THIS_MODULE, "asgn1") 
+   # To: class_create("asgn1")
+   # If you encounter this error, update line 742 in ramdisk.c
+   ```
+
+3. **Module verification warnings (safe to ignore):**
+   ```bash
+   # Warning: loading out-of-tree module taints kernel
+   # Warning: module verification failed: signature and/or required key missing
+   # These warnings are normal for development modules and can be ignored
+   ```
+
+4. **Compiler version warnings (safe to ignore):**
+   ```bash
+   # Warning: the compiler differs from the one used to build the kernel
+   # This is normal in container environments and will not affect functionality
+   ```
+
+### Module Loading and Device Setup
 
 ```bash
-# Load the module
+# Method 1: Using make targets (recommended)
 sudo make load
 
-# Verify loading
+# Method 2: Manual loading
+sudo insmod ramdisk.ko
+
+# Verify module loaded successfully
 lsmod | grep ramdisk
 
-# Check device creation
+# Create device node if not automatically created
+sudo mknod /dev/asgn1 c 239 0
+
+# Set proper permissions for device access
+sudo chmod 666 /dev/asgn1
+
+# Verify device node creation
 ls -l /dev/asgn1
 
-# Set permissions 
-sudo chmod 666 /dev/asgn1
+# Check kernel messages for successful loading
+sudo dmesg | tail -10
 ```
+
+**Expected Success Messages:**
+```
+ramdisk: Initializing Virtual Ramdisk module with enhanced features
+ramdisk: Memory cache initialized for optimized allocations
+ramdisk: Enhanced Virtual Ramdisk initialized successfully
+ramdisk: Major number: 239, Device node: /dev/asgn1
+ramdisk: /proc/ramdisk_info entry created successfully
+```
+
+### Troubleshooting Module Loading
+
+**Common Issues and Solutions:**
+
+1. **Module loading fails - insmod not found:**
+   ```bash
+   # Install kernel module utilities
+   sudo apt install -y kmod
+   # Verify installation
+   which insmod
+   ```
+
+2. **Permission denied errors:**
+   ```bash
+   # Ensure running with sudo privileges
+   sudo insmod ramdisk.ko
+   # Check if SELinux/AppArmor is interfering (if applicable)
+   ```
+
+3. **Device node not created automatically:**
+   ```bash
+   # Create manually with correct major number (239)
+   sudo mknod /dev/asgn1 c 239 0
+   sudo chmod 666 /dev/asgn1
+   ```
+
+4. **Module verification warnings (safe to ignore):**
+   ```bash
+   # These warnings are normal for development modules:
+   # "loading out-of-tree module taints kernel"
+   # "module verification failed: signature and/or required key missing"
+   ```
+
+5. **Device busy or resource conflicts:**
+   ```bash
+   # Check if device already exists
+   ls -l /dev/asgn1
+   # Remove conflicting device node
+   sudo rm /dev/asgn1
+   # Reload module
+   sudo rmmod ramdisk && sudo insmod ramdisk.ko
+   ```
 
 ### Module Unloading
 
 ```bash
-# Unload the module
+# Method 1: Using make targets (recommended)
 sudo make unload
 
-# Verify cleanup
+# Method 2: Manual unloading
+sudo rmmod ramdisk
+
+# Clean up device node (if manually created)
+sudo rm /dev/asgn1
+
+# Verify complete cleanup
 lsmod | grep ramdisk    # Should show no results
-ls -l /dev/asgn1        # Should show device removed
+ls -l /dev/asgn1        # Should show "No such file or directory"
+cat /proc/ramdisk_info  # Should show "No such file or directory"
 ```
+
+### Complete Installation Verification
+
+**System Readiness Checklist:**
+
+```bash
+# Check kernel version compatibility
+uname -r
+
+# Verify kernel headers are installed
+ls /lib/modules/$(uname -r)/build/ >/dev/null && echo "Kernel headers: OK" || echo "Kernel headers: MISSING"
+
+# Verify build tools
+which gcc make >/dev/null && echo "Build tools: OK" || echo "Build tools: MISSING"
+
+# Verify kernel module utilities
+which insmod rmmod lsmod >/dev/null && echo "Module utilities: OK" || echo "Module utilities: MISSING"
+
+# Check sudo privileges
+sudo -v && echo "Sudo access: OK" || echo "Sudo access: REQUIRED"
+```
+
+**If any checks fail, install missing components:**
+
+```bash
+# For Ubuntu/Debian systems
+sudo apt update
+sudo apt install -y build-essential linux-headers-$(uname -r) kmod
+
+# For CentOS/RHEL/Fedora systems
+sudo yum install kernel-devel kernel-headers gcc make
+# or for newer versions:
+sudo dnf install kernel-devel kernel-headers gcc make
+
+# For Arch Linux systems
+sudo pacman -S linux-headers base-devel
+```
+
+### Common Issues and Complete Solutions
+
+1. **"No such file or directory" during build:**
+   ```bash
+   # Problem: Missing kernel headers
+   # Solution:
+   sudo apt install linux-headers-$(uname -r)
+   # Verify installation:
+   ls /lib/modules/$(uname -r)/build/
+   ```
+
+2. **"insmod: command not found":**
+   ```bash
+   # Problem: Missing kernel module utilities
+   # Solution:
+   sudo apt install kmod
+   # Verify installation:
+   which insmod
+   ```
+
+3. **"Permission denied" when accessing /dev/asgn1:**
+   ```bash
+   # Problem: Incorrect device permissions
+   # Solution:
+   sudo chmod 666 /dev/asgn1
+   # Verify:
+   ls -l /dev/asgn1
+   # Should show: crw-rw-rw- 1 root root 239, 0
+   ```
+
+4. **Device not created automatically:**
+   ```bash
+   # Problem: udev may not create device node
+   # Solution: Create manually
+   sudo mknod /dev/asgn1 c 239 0
+   sudo chmod 666 /dev/asgn1
+   ```
+
+5. **Module fails to load with "Invalid module format":**
+   ```bash
+   # Problem: Kernel version mismatch
+   # Solution: Ensure headers match running kernel
+   uname -r
+   dpkg -l | grep linux-headers
+   # Reinstall correct headers if needed:
+   sudo apt install --reinstall linux-headers-$(uname -r)
+   # Rebuild module:
+   make clean && make module
+   ```
+
+6. **"Device or resource busy" when unloading:**
+   ```bash
+   # Problem: Module in use
+   # Solution: Close all handles and wait
+   sudo lsof /dev/asgn1  # Check what's using device
+   # Kill processes if necessary, then:
+   sudo rmmod ramdisk
+   ```
+
+7. **Build warnings about compiler differences:**
+   ```bash
+   # This warning is normal and can be ignored:
+   # "warning: the compiler differs from the one used to build the kernel"
+   # The module will still function correctly
+   ```
+
+8. **Tests fail with "No such device":**
+   ```bash
+   # Complete diagnostic and fix:
+   lsmod | grep ramdisk || echo "Module not loaded"
+   ls -l /dev/asgn1 || echo "Device node missing"
+   
+   # Fix sequence:
+   sudo rmmod ramdisk 2>/dev/null
+   sudo insmod ramdisk.ko
+   sudo mknod /dev/asgn1 c 239 0 2>/dev/null
+   sudo chmod 666 /dev/asgn1
+   
+   # Test:
+   echo "test" > /dev/asgn1 && cat /dev/asgn1
+   ```
 
 ## Usage
 
@@ -306,27 +637,158 @@ All design decisions are cross-referenced against multiple authoritative sources
 
 ## Testing
 
-### Test Framework
+### Complete Testing Guide for New Systems
+
+**Step-by-Step Testing Process:**
+
+1. **Initial Setup Verification:**
+   ```bash
+   # Ensure you're in the correct directory
+   cd /path/to/COSC440_A1_Virtual_Ramdisk/src
+   
+   # Verify all build files are present
+   ls -la ramdisk.ko ramdisk_test
+   
+   # Check module is loaded
+   lsmod | grep ramdisk
+   
+   # Verify device node exists with correct permissions
+   ls -l /dev/asgn1
+   ```
+
+2. **Basic Assignment Requirements Testing:**
+   ```bash
+   # Test assignment-specified commands
+   ls > /dev/asgn1
+   cat /dev/asgn1
+   
+   # Expected: Should display directory listing
+   # If this fails, check device permissions: sudo chmod 666 /dev/asgn1
+   ```
+
+3. **Core Functionality Testing:**
+   ```bash
+   # Test basic write/read
+   echo "Hello Virtual Ramdisk!" > /dev/asgn1
+   cat /dev/asgn1
+   
+   # Test write-only clearing (assignment requirement)
+   echo "New content after clearing" > /dev/asgn1
+   cat /dev/asgn1
+   
+   # Test unlimited file size
+   dd if=/dev/zero of=/dev/asgn1 bs=1K count=100
+   cat /proc/ramdisk_info | head -10
+   ```
+
+4. **Advanced Feature Testing:**
+   ```bash
+   # Run comprehensive test program
+   sudo ./ramdisk_test
+   
+   # Or use make target
+   sudo make full_test
+   ```
+
+5. **Monitoring and Verification:**
+   ```bash
+   # Check /proc interface
+   cat /proc/ramdisk_info
+   
+   # Monitor kernel logs
+   sudo dmesg | tail -30
+   
+   # Verify module information
+   make info
+   ```
+
+### Test Framework Components
 - **Basic I/O Testing:** Write/read operations with data integrity verification
 - **IOCTL Functionality:** User limit enforcement and concurrent access control
 - **Seek Operations:** SEEK_SET, SEEK_CUR, SEEK_END validation  
 - **Edge Cases:** Large files, sparse access, write-only clearing
 - **Concurrency:** Multiple process access and synchronization
+- **Memory Management:** Page allocation/deallocation testing
+- **Enhanced Features:** mmap, memory cache, /proc interface testing
 
-### Running Tests
+### Test Commands Reference
+
 ```bash
-# Quick functionality test
+# Quick functionality test (basic requirements only)
 make test
 
-# Comprehensive test suite
+# Comprehensive test suite (all features including bonuses)
 make full_test
 
-# Manual testing
+# Manual comprehensive testing
 sudo ./ramdisk_test
 
-# Monitor kernel messages
+# Debug information
+make debug
+
+# Module information
+make info
+
+# Monitor kernel messages during testing
 sudo dmesg | tail -20
 ```
+
+### Expected Test Results
+
+**Successful Basic Test Output:**
+```
+Testing Enhanced Virtual Ramdisk functionality...
+1. Writing test data to /dev/asgn1
+2. Reading back from /dev/asgn1
+Hello Enhanced Virtual Ramdisk!
+3. Checking /proc interface
+=== Virtual Ramdisk Status ===
+Device node: /dev/asgn1
+Major number: 239
+File size: 29 bytes
+4. Testing seek functionality
+Enhanced test complete - ramdisk is working!
+```
+
+**Comprehensive Test Success Indicators:**
+- All I/O operations complete successfully
+- IOCTL user limits enforced (blocks excess users with EBUSY)
+- Seek operations work with all three modes
+- Large file operations (8KB+) complete without errors
+- mmap functionality maps and unmaps successfully
+- /proc interface shows accurate device statistics
+- Concurrent access properly controlled
+- Memory cleanup verified on module unload
+
+### Troubleshooting Test Failures
+
+1. **Device not accessible:**
+   ```bash
+   # Check if device node exists
+   ls -l /dev/asgn1 || sudo mknod /dev/asgn1 c 239 0
+   # Fix permissions
+   sudo chmod 666 /dev/asgn1
+   ```
+
+2. **Module not loaded:**
+   ```bash
+   # Reload module
+   sudo rmmod ramdisk 2>/dev/null; sudo insmod ramdisk.ko
+   ```
+
+3. **Permission denied on tests:**
+   ```bash
+   # Run test with sudo
+   sudo make full_test
+   sudo ./ramdisk_test
+   ```
+
+4. **/proc interface not available:**
+   ```bash
+   # Check kernel messages for errors
+   sudo dmesg | grep ramdisk
+   # Reload module if necessary
+   ```
 
 ## Advanced Features
 
