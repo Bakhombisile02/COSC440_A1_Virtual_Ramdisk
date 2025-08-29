@@ -1,5 +1,5 @@
 /*
- * ramdisk_test.c - Comprehensive Test Program for Enhanced Virtual Ramdisk
+ * ramdisk_test.c - Comprehensive Test Program 
  * 
  * Author: Bakhombisile Dlamini - COSC440 Assignment 1
  * Description: Complete test suite for virtual ramdisk character device driver

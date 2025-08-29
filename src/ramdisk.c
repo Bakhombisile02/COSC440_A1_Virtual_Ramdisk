@@ -4,20 +4,6 @@
 /* Author: Bakhombisile Dlamini - COSC440 Assignment 1 */
 /* Description: Virtual Ramdisk Character Device Driver Implementation */
 /* Based on: Template module by Zhiyi Huang (temp.c) */
-/* Version: 1.1 - Enhanced with O(1) Hash Table Page Lookup */
-/*----------------------------------------------------------------------------*/
-/* Performance Enhancement: Implemented hash table for O(1) page lookup
- * - Uses kernel DECLARE_HASHTABLE with 256 buckets (2^8)
- * - hash_32() function for even distribution across buckets
- * - Maintains both linked list (sequential) and hash table (random access)
- * - Improves page lookup from O(n) to O(1) average case
- * - Research: Kernel hashtable.h patterns and hash function selection
- */
-/* This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation; either version
- * 2 of the License, or (at your option) any later version.
- */
 
 #include <linux/module.h>
 #include <linux/moduleparam.h>
